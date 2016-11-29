@@ -1,0 +1,41 @@
+FINDMAX START   100     .inst to assem indicate start addr
+.                       the 100 is in hex, not base 10
+        LDA     DAT     .A <- (m..m+2) acc received val at DAT
+        STA     BIG     .m..m+2 <- (A) BIG rec val in acc
+.                       the first data is the largest
+        LDTF     NUM     .T <- number of numbers
+        LDX     #3      .X <- 3
+UP      LDA     DAT,X   .A <- num at DAT + (X)
+        COMP    BIG     .CC <- if (BIG) versus (A)
+        JLT     DN      .if CC is LT jump to addr at DN
+        STA     BIG     .(A) is bigger than (BIG) BIG <- (A)
+DN      LDS     #3      .S <- 3
+        ADDR    S,X     .X <- (X) + (S)   x = x + 3
+        RMO     X,A     .A <- (X)
+        COMP    NUM     .CC (A) with (NUM) to see if done
+        JLTF     UP      .PC is changed to address of UP
+
+
+
+        RSUB    DONE
+
+BIG     RESW    1
+NUM     WORD    42
+		
+DAT     WORD    14
+        WORD    22
+        WORD    42
+        WORD    86
+        WORD    8
+        WORD    64
+        WORD    90
+        WORD    41
+        WORD    146
+        WORD    12
+        WORD    2965
+        WORD    4096
+        WORD    512
+        WORD    111
+        WORD    121
+      		END
+            
