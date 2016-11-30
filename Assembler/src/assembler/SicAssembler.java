@@ -7,7 +7,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.StringTokenizer;
 
 /**
@@ -15,7 +17,8 @@ import java.util.StringTokenizer;
  */
 public class SicAssembler {
 
-    private static final String OUTPUTFILE = "output.txt";
+    private String listFile;
+    private String objectFile;
     private HashTable symbols;
     private OPHashTable opcodes;
     private String[] assemblerDirectives = {"BASE", "LTORG", "START", "END"};
@@ -26,6 +29,7 @@ public class SicAssembler {
      * @param args the command line arguments
      */
     public SicAssembler(String[] args) {
+        int temp;
         int lineCount;
         String opCodeList = "SICOPS.txt";
         File file;
@@ -33,16 +37,16 @@ public class SicAssembler {
         if (args[0] != null || !args[0].isEmpty()) {
             file = new File(args[0]);
             if (!file.isDirectory() && file.exists()) {
+                temp = file.getName().lastIndexOf(".");
+                this.listFile = file.getName().substring(0, temp) + ".lst";
+                this.objectFile = file.getName().substring(0, temp) + ".obj";
                 try {
                     lineCount = getLineCount(file);
                     symbols = new HashTable(lineCount);
                     lineCount = getLineCount(new File(opCodeList));
                     opcodes = buildOPTable(lineCount, opCodeList);
-                    programAssemble(file, symbols, opcodes);
-                    // Throw some blank lines down
-                    writeToFile("");
-                    writeToFile("");
-                    symbols.printTable();
+                    temp = passOneAssemble(file, symbols, opcodes);
+                    passTwoAssemble(temp, symbols, opcodes);
                 }
                 catch (Exception e) {
                     e.printStackTrace(System.out);
@@ -89,66 +93,90 @@ public class SicAssembler {
         return table;
     }   
 
-    private void programAssemble(File file, HashTable symbols, OPHashTable opcodes) throws FileNotFoundException {
+    private int passOneAssemble(File file, HashTable symbols, OPHashTable opcodes) throws FileNotFoundException {
+        int initialAddress;
         int address;
         String temp;
         DataItem item;
         String programLine;
         Scanner programScanner = new Scanner(file);
         
-        // To write to file
-        try {
-            FileWriter fileWriter = new FileWriter(OUTPUTFILE, true);
-            BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
-            PrintWriter outputWriter = new PrintWriter(bufferedWriter);
-
-            //Read First line
-            programLine = programScanner.nextLine();
-            if ("START".equals(programLine.substring(10, 16).trim().toUpperCase())) {
-                address = Integer.parseInt(programLine.substring(19, 28).trim(), 16);
-                // Because it's the first line, I don't care
-                symbols.insertData(buildCommand(programLine, opcodes));
+        //Read First line
+        programLine = programScanner.nextLine();
+        if ("START".equals(programLine.substring(10, 16).trim().toUpperCase())) {
+            address = Integer.parseInt(programLine.substring(19, 28).trim(), 16);
+            // Because it's the first line, I don't care
+            symbols.insertData(buildCommand(programLine, opcodes));
+        }
+        else {
+            address = 0;
+        }
+        initialAddress = address;
+        writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.listFile);
+        while ((programLine = programScanner.nextLine()) != null) {
+            if (isNullOrEmpty(programLine)) {
+                        continue;
+            }
+            else if (programLine.charAt(0) == '.') {
+                // Comment Line
+                writeToFile(programLine, this.listFile);
             }
             else {
-                address = 0;
-            }
-            writeToFile(Integer.toHexString(address)+ "\t" + programLine);
-            while ((programLine = programScanner.nextLine()) != null) {
-                if (isNullOrEmpty(programLine)) {
-                    continue;
+                item = buildCommand(programLine, opcodes);
+                item.setAddress(address);
+                if (!isNullOrEmpty(temp = symbols.insertData(item))) {
+                    item.addError(temp);
                 }
-                else if (programLine.charAt(0) == '.') {
-                    // Comment Line
-                    writeToFile(programLine);
+                if ("END".equals(item.getMneumonic())) {
+                    break;
                 }
-                else {
-                    item = buildCommand(programLine, opcodes);
-                    item.setAddress(address);
-                    if (!isNullOrEmpty(temp = symbols.insertData(item))) {
-                        item.addError(temp);
-                    }
-                    if ("END".equals(item.getMneumonic())) {
-                        break;
-                    }
-                    if (item.getOperandFlag() == '=') {
-                        // It's a operand is a literal
-                        literals.add(item.getOperand());
-                    }
-                    writeToFile(Integer.toHexString(address) + "\t" + programLine);
-                    if (!isNullOrEmpty(item.getError())) {
-                        writeToFile("----- ERROR:" + item.getError() + "-----");
-                    }
-                    address += item.getCommandLength();
-                    if ("LTORG".equals(item.getMneumonic())) {
-                        address = this.printLiterals(address);
-                    }
+                if (item.getOperandFlag() == '=') {
+                    // It's a operand is a literal
+                    literals.add(item.getOperand());
+                }
+                writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.listFile);
+                if (!isNullOrEmpty(item.getError())) {
+                    writeToFile(".----- ERROR:" + item.getError() + "-----", this.listFile);
+                }
+                address += item.getCommandLength();
+                if ("LTORG".equals(item.getMneumonic())) {
+                    address = this.printLiterals(address);
                 }
             }
-            writeToFile(Integer.toHexString(address) + "\t" + programLine);
         }
-        catch (IOException ex) {
-            System.out.printf("%s%n", ex.getMessage());
-        }
+        writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.listFile);
+        
+        return address - initialAddress;
+    }// end passOneAssemble()
+    
+    private void passTwoAssemble(int programLength, HashTable symbols, OPHashTable opcodes) {
+        int address;
+        int textRecordLength;
+        String textRecord;
+        DataItem dataItem;
+        OPCode opcode;
+        
+        //Pull first line
+        
+        //Get address
+        
+        //Create Header record
+        
+        //Start loop
+        
+        //  Pull line
+        
+        //  Get OPcode
+        
+        //  Get operand
+        
+        //  Calculate displacement
+        
+        //  Write text record for line
+        
+        //End loop
+        
+        //Write last text record
     }
     
     private DataItem buildCommand(String line, OPHashTable opTable) {
@@ -278,6 +306,140 @@ public class SicAssembler {
         return item;
     }
     
+    private DataItem buildItem(String line, OPHashTable opTable) {
+        String temp;
+        String label = null;
+        String mneumonic = null;
+        String operand = null;
+        String comments = null;
+        String error = "";
+        String indexEntry = null;
+        int index;
+        int commandLength;
+        int address = 0;
+        char operandFlag;
+        boolean extended;
+        DataItem item;
+        OPCode opc;
+        StringTokenizer tokenMaker = new StringTokenizer(line);
+        
+        while (tokenMaker.hasMoreTokens()) {
+            temp = tokenMaker.nextToken();
+            index = line.indexOf(temp);
+            if (index >= 0 && index < 7) {
+                address = Integer.parseInt(temp, 16);
+            }
+            else if (index >= 7 && index < 14) {
+                label = temp;
+            }
+            else if (14 <= index && index < 23) {
+                mneumonic = temp;
+            }
+            else if (23 <= index && index < 34) {
+                if (temp.charAt(0) == '#' || temp.charAt(0) == '@') {
+                    // Operand has a flag
+                    temp = temp.substring(1);
+                    if (temp.contains(",")) {
+                        index = temp.indexOf(",");
+                        operand = temp.substring(0, index);
+                        indexEntry = temp.substring(index + 1).trim();
+                    }
+                    else {
+                        operand = temp;
+                    }
+                }
+                else if (temp.charAt(0) == '=') {
+                    literals.add(temp);
+                    operand = temp;
+                }
+                else {
+                    operand = temp;
+                }
+            }
+            else if (34 <= index && index < line.length()) {
+                comments = temp;
+            }
+            else {
+                error = temp + " not in extpected index range";
+            }
+        }
+        
+        // Validate Strings
+        if (isNullOrEmpty(label)) {
+            error = " No Label Found ";
+        }
+        if (isNullOrEmpty(operand)) {
+            error += " No Operand ";
+        }
+
+        if (line.length() >= 10) {
+            extended = (line.charAt(16) == '+');
+        }
+        else {
+            extended = false;
+        }
+        if (line.length() >= 26) {
+            operandFlag = line.charAt(25);
+        }
+        else {
+            operandFlag = ' ';
+        }
+
+        item = new DataItem(label, extended, mneumonic, operandFlag, operand, comments);
+        item.setAddress(address);
+        
+        
+        if (isNullOrEmpty(mneumonic)) {
+            error += " Invalid mneomonic ";
+            commandLength = 0;
+        }
+        else {
+            index = opTable.searchForData(mneumonic);
+            if (index == -1) {
+                // It's not an opcode
+                // Do stuff for assembler directives and reserved words
+                if (searchArray(this.assemblerDirectives, mneumonic)) {
+                    // ASSEMBLER DIRECTIVE
+                    commandLength = 0;
+                }
+                else if ("RESW".equalsIgnoreCase(mneumonic)){
+                    commandLength = 3 * Integer.parseInt(operand);
+                }
+                else if ("RESB".equalsIgnoreCase(mneumonic)){
+                    commandLength = Integer.parseInt(operand);
+                }
+                else if ("WORD".equalsIgnoreCase(mneumonic)) {
+                    commandLength = 3;
+                }
+                else if ("BYTE".equalsIgnoreCase(mneumonic)) {
+                    commandLength = Integer.toHexString((Integer.parseInt(operand))).length();
+                }
+                else {
+                    error += " Invalid Mneumonic ";
+                    commandLength = 0;
+                }
+            }
+            else {
+                // Calculate the commandLength
+                opc = opTable.getOPCode(index);
+                commandLength = opc.getFormat();
+            }
+        }
+        // Set commandLength
+        item.setCommandLength(commandLength);
+        
+        
+        if (!isNullOrEmpty(indexEntry)) {
+            item.setIndexEntry(indexEntry);
+        }
+
+        if (!isNullOrEmpty(error)) {
+            item.setError(error);
+        }
+        return item;
+    }
+    
+    
     private boolean isNullOrEmpty(String str) {
         boolean a = false;
         if ("".equals(str) || str == null) {
@@ -319,9 +481,9 @@ public class SicAssembler {
      * Outputs the message to the Output file
      * @param message 
      */
-    public static void writeToFile(String message) {
+    public void writeToFile(String message, String filename) {
         try (   
-                FileWriter fileWriter = new FileWriter(OUTPUTFILE, true);
+                FileWriter fileWriter = new FileWriter(filename, true);
                 BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
                 PrintWriter outputWriter = new PrintWriter(bufferedWriter);
             ) {

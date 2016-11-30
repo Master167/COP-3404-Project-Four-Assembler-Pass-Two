@@ -104,15 +104,15 @@ public class HashTable {
         DataItem item;
         Object temp;
         int index;
-        //System.out.printf("Location\tLabel  \tAddress\t%n");
-        SicAssembler.writeToFile(String.format("Location\tLabel  \tAddress\t"));
+        System.out.printf("Location\tLabel  \tAddress\t%n");
+//        SicAssembler.writeToFile(String.format("Location\tLabel  \tAddress\t"));
         while (iterator.hasNext()) {
             temp = iterator.next();
             if ((temp != null ) && (temp instanceof DataItem)) {
                 index = list.indexOf(temp);
                 item = (DataItem)temp;
-                //System.out.printf("%-8d\t%s\t%7s%n", index, item.getLabel(), Integer.toHexString(item.getAddress()));
-                SicAssembler.writeToFile(String.format("%-8d\t%s\t%7s", index, item.getLabel(), Integer.toHexString(item.getAddress())));
+                System.out.printf("%-8d\t%s\t%7s%n", index, item.getLabel(), Integer.toHexString(item.getAddress()));
+//                SicAssembler.writeToFile(String.format("%-8d\t%s\t%7s", index, item.getLabel(), Integer.toHexString(item.getAddress())));
             }
         }
     }
