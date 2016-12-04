@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Scanner;
@@ -176,7 +177,7 @@ public class SicAssembler {
             //Get address
             address = Integer.parseInt(tokenMaker.nextToken().trim());
             //Create Header record
-            writeToFile(temp, this.listFile);
+            writeToFile(String.format("%-8s %s", "", temp), this.listFile);
             // Check if program has label
             temp = tokenMaker.nextToken();
             index = symbols.searchForData(temp);
@@ -189,7 +190,7 @@ public class SicAssembler {
             }
             writeToFile(textRecord, this.objectFile);
             //Start loop
-            while ((programLine = fileScanner.nextLine()) != null) {
+            while (fileScanner.hasNextLine() && (programLine = fileScanner.nextLine()) != null) {
                 isPC = true;
                 displacement = 0;
                 textRecord = "";
@@ -217,7 +218,7 @@ public class SicAssembler {
                             // outside pc range
                             isPC = false;
                             if (baseAddress >= 0) {
-                                displacement = baseAddress - (symbols.getData(index).getAddress());
+                                displacement = symbols.getData(index).getAddress() - baseAddress;
                             }
                             else {
                                 writeToFile("---Error: No Base Declared ---", this.listFile);
@@ -267,6 +268,12 @@ public class SicAssembler {
                             textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 3);
                         }
                         
+                        if (textRecord.length() < 2) {
+                            while (textRecord.length() < 2) {
+                                textRecord = "0" + textRecord;
+                            }
+                        }
+                        
                         if (isPC) {
                             if (isNullOrEmpty(dataItem.getIndexEntry())) {
                                 textRecord += Integer.toHexString(2);
@@ -290,6 +297,9 @@ public class SicAssembler {
                                 temp = "0" + temp;
                             }
                         }
+                        else if (temp.length() > 3) {
+                            temp = temp.substring(temp.length() - 3);
+                        }
                         textRecord += temp;
                     }
                     else {
@@ -306,6 +316,12 @@ public class SicAssembler {
                             textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 3);
                         }
                         
+                        if (textRecord.length() < 2) {
+                            while (textRecord.length() < 2) {
+                                textRecord = "0" + textRecord;
+                            }
+                        }
+                        
                         textRecord += Integer.toHexString(1);
                         temp = Integer.toHexString(dataItem.getAddress());
                         if (temp.length() < 5) {
@@ -317,7 +333,7 @@ public class SicAssembler {
                     }// end if/else for opcode format
                     
                     // WRITE THE RECORD
-                    writeToFile(programLine + " " + textRecord, this.listFile);
+                    writeToFile(String.format("%-8s %s", textRecord, programLine), this.listFile);
                     if (!isNullOrEmpty(textRecord)) {
                         index = (textRecord.length() / 2);
                         if (index == 0) {
@@ -339,7 +355,11 @@ public class SicAssembler {
                                 writeToFile("---Error: Unknown Symbol used for BASE ---", this.listFile);
                             }
                         }
-                        writeToFile(programLine, this.listFile);
+                        writeToFile(String.format("%-8s %s", textRecord, programLine), this.listFile);
+                        if (dataItem.getMneumonic().equalsIgnoreCase("END")) {
+                            writeToFile("E 000000", this.objectFile);
+                            break;
+                        }
                         continue;
                     }
                     else if ("WORD".equalsIgnoreCase(dataItem.getMneumonic())) {
@@ -360,11 +380,22 @@ public class SicAssembler {
                                 textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand(), 16));
                             }
                         }
+                        if (textRecord.length() < 6) {
+                            while (textRecord.length() < 6) {
+                                textRecord = "0" + textRecord;
+                            }
+                        }
                     }
                     else if ("BYTE".equalsIgnoreCase(dataItem.getMneumonic())) {
                         textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand(), 16));
+                        if (textRecord.length() < 6) {
+                            while (textRecord.length() < 6) {
+                                textRecord = "0" + textRecord;
+                            }
+                        }
                     }
-                    writeToFile(programLine + " " + textRecord, this.listFile);
+
+                    writeToFile(String.format("%-8s %s", textRecord, programLine), this.listFile);
                     if (!isNullOrEmpty(textRecord)) {
                         index = (textRecord.length() / 2);
                         if (index == 0) {
@@ -374,13 +405,13 @@ public class SicAssembler {
                     }
                 }
                 
-            }
-
-            //Write last text record
+            }// end while
+            fileScanner.close();
+            Files.deleteIfExists(file.toPath());
         }
         catch (FileNotFoundException ex) {
-            System.out.println("I don't know man");
-        }
+            System.out.println("I don't know man, the file I made is gone.");
+        }   
     }
     
     private DataItem buildCommand(String line, OPHashTable opTable) {
