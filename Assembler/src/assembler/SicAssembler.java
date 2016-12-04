@@ -166,9 +166,9 @@ public class SicAssembler {
         File file;
         Scanner fileScanner;
         StringTokenizer tokenMaker;
+        file = new File(this.intermediateFile);
         
         try {
-            file = new File(this.intermediateFile);
             fileScanner = new Scanner(file);
             //Pull first line
             temp = fileScanner.nextLine();
@@ -339,7 +339,11 @@ public class SicAssembler {
                         if (index == 0) {
                             index = 1;
                         }
-                        writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
+                        temp = Integer.toHexString(dataItem.getAddress());
+                        if (temp.length() < 6) {
+                            temp = "0" + temp;
+                        }
+                        writeToFile(String.format("T %s %1d %s", temp, index, textRecord), this.objectFile);
                     }
                 }
                 else {
@@ -401,17 +405,21 @@ public class SicAssembler {
                         if (index == 0) {
                             index = 1;
                         }
-                        writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
+                        temp = Integer.toHexString(dataItem.getAddress());
+                        if (temp.length() < 6) {
+                            temp = "0" + temp;
+                        }
+                        writeToFile(String.format("T %s %01d %s", temp, index, textRecord), this.objectFile);
                     }
                 }
                 
             }// end while
             fileScanner.close();
-            Files.deleteIfExists(file.toPath());
         }
         catch (FileNotFoundException ex) {
             System.out.println("I don't know man, the file I made is gone.");
         }   
+        Files.deleteIfExists(file.toPath());
     }
     
     private DataItem buildCommand(String line, OPHashTable opTable) {
