@@ -19,6 +19,7 @@ public class SicAssembler {
 
     private String listFile;
     private String objectFile;
+    private String intermediateFile;
     private HashTable symbols;
     private OPHashTable opcodes;
     private String[] assemblerDirectives = {"BASE", "LTORG", "START", "END"};
@@ -40,6 +41,7 @@ public class SicAssembler {
                 temp = file.getName().lastIndexOf(".");
                 this.listFile = file.getName().substring(0, temp) + ".lst";
                 this.objectFile = file.getName().substring(0, temp) + ".obj";
+                this.intermediateFile = file.getName().substring(0, temp) + ".imd";
                 try {
                     lineCount = getLineCount(file);
                     symbols = new HashTable(lineCount);
@@ -112,14 +114,14 @@ public class SicAssembler {
             address = 0;
         }
         initialAddress = address;
-        writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.listFile);
+        writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.intermediateFile);
         while ((programLine = programScanner.nextLine()) != null) {
             if (isNullOrEmpty(programLine)) {
                         continue;
             }
             else if (programLine.charAt(0) == '.') {
                 // Comment Line
-                writeToFile(programLine, this.listFile);
+                writeToFile(programLine, this.intermediateFile);
             }
             else {
                 item = buildCommand(programLine, opcodes);
@@ -134,9 +136,9 @@ public class SicAssembler {
                     // It's a operand is a literal
                     literals.add(item.getOperand());
                 }
-                writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.listFile);
+                writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.intermediateFile);
                 if (!isNullOrEmpty(item.getError())) {
-                    writeToFile(".----- ERROR:" + item.getError() + "-----", this.listFile);
+                    writeToFile(".----- ERROR:" + item.getError() + "-----", this.intermediateFile);
                 }
                 address += item.getCommandLength();
                 if ("LTORG".equals(item.getMneumonic())) {
@@ -144,7 +146,7 @@ public class SicAssembler {
                 }
             }
         }
-        writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.listFile);
+        writeToFile(String.format("%6s %s", Integer.toHexString(address).toUpperCase(), programLine), this.intermediateFile);
         
         return address - initialAddress;
     }// end passOneAssemble()
@@ -166,14 +168,16 @@ public class SicAssembler {
         StringTokenizer tokenMaker;
         
         try {
-            file = new File(this.listFile);
+            file = new File(this.intermediateFile);
             fileScanner = new Scanner(file);
             //Pull first line
-            tokenMaker = new StringTokenizer(fileScanner.nextLine());
+            temp = fileScanner.nextLine();
+            tokenMaker = new StringTokenizer(temp);
             
             //Get address
             address = Integer.parseInt(tokenMaker.nextToken().trim());
             //Create Header record
+            writeToFile(temp, this.listFile);
             // Check if program has label
             temp = tokenMaker.nextToken();
             index = symbols.searchForData(temp);
@@ -189,16 +193,19 @@ public class SicAssembler {
             while ((programLine = fileScanner.nextLine()) != null) {
                 isPC = true;
                 displacement = 0;
+                textRecord = "";
                 tokenMaker = new StringTokenizer(programLine);
                 
                 temp = tokenMaker.nextToken();
                 if (temp.charAt(0) == '.' || isNullOrEmpty(temp)) {
+                    writeToFile(programLine, this.listFile);
                     continue;
                 }
                 else {
-                    address = Integer.parseInt(temp);
+                    address = Integer.parseInt(temp, 16);
                 }
                 dataItem = buildItem(programLine, opcodes);
+                dataItem.setAddress(address);
                 //  Get OPcode
                 index = opcodes.searchForData(dataItem.getMneumonic());
                 
@@ -218,11 +225,30 @@ public class SicAssembler {
                     }
                     else {
                         // Does the operand have an immediate addressing flag (is it a number?)
+                        throw new Exception("Does is this operand a number? " + dataItem.getOperand());
                     }
 
                     
                     if (opcode.getFormat() == 2) {
-                        // Register instruction
+                        textRecord = opcode.getOpcode();
+                        index = programLine.indexOf(',');
+                        temp = Character.toString(programLine.charAt(index - 1));
+                        index = opcodes.searchForData(temp);
+                        if (index >= 0) {
+                            textRecord += opcodes.getOPCode(index).getOpcode();
+                            index = programLine.indexOf(',');
+                            temp = Character.toString(programLine.charAt(index + 1));
+                            index = opcodes.searchForData(temp);
+                            if (index > 0) {
+                                textRecord += opcodes.getOPCode(index).getOpcode();
+                            }
+                            else {
+                                writeToFile("---ERROR: Unknown Register ---", this.listFile);
+                            }
+                        }
+                        else {
+                            writeToFile("---ERROR: Unknown Register ---", this.listFile);
+                        }
                     }
                     else if (opcode.getFormat() == 3) {
                         // Standard instruction
@@ -230,13 +256,13 @@ public class SicAssembler {
                             textRecord = opcode.getOpcode();
                         }
                         else if (dataItem.getOperandFlag() == '#') {
-                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode()) + 1);
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 1);
                         }
                         else if (dataItem.getOperandFlag() == '@') {
-                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode()) + 2);
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 2);
                         }
                         else {
-                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode()) + 3);
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 3);
                         }
                         
                         if (isPC) {
@@ -265,19 +291,68 @@ public class SicAssembler {
                         textRecord += temp;
                     }
                     else {
-                        //Extended instruction
-                    }
+                        if (opcode.getLabel().charAt(0) == '*') {
+                            textRecord = opcode.getOpcode();
+                        }
+                        else if (dataItem.getOperandFlag() == '#') {
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 1);
+                        }
+                        else if (dataItem.getOperandFlag() == '@') {
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 2);
+                        }
+                        else {
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode(), 16) + 3);
+                        }
+                        
+                        textRecord += Integer.toHexString(1);
+                        temp = Integer.toHexString(dataItem.getAddress());
+                        if (temp.length() < 5) {
+                            while (temp.length() < 5) {
+                                temp = "0" + temp;
+                            }
+                        }
+                        textRecord += temp;
+                    }// end if/else for opcode format
                     
                     // WRITE THE RECORD
+                    writeToFile(programLine + " " + textRecord, this.listFile);
                     writeToFile(String.format("T %06d %01d %s", address, (textRecord.length() / 2), textRecord), this.objectFile);
                 }
                 else {
                     // Do I have an assembler directive?
-                    // Do I have a RESW
+                    if (searchArray(this.assemblerDirectives, dataItem.getMneumonic())) {
+                        // check if base
+                        if (dataItem.getMneumonic().equalsIgnoreCase("BASE")) {
+                            index = symbols.searchForData(dataItem.getOperand());
+                            if (index >= 0) {
+                                baseAddress = symbols.getData(index).getAddress();
+                            }
+                            else {
+                                writeToFile("---Error: Unknown Symbol used for BASE ---", this.listFile);
+                            }
+                        }
+                        writeToFile(programLine, this.listFile);
+                        continue;
+                    }
+                    else if ("WORD".equalsIgnoreCase(dataItem.getMneumonic())) {
+                        if (dataItem.getOperand().contains("C")) {
+                            temp = dataItem.getOperand().substring(dataItem.getMneumonic().indexOf("\'") + 1, dataItem.getMneumonic().length() - 1);
+                            char[] array = temp.toCharArray();
+                            for(char a: array) {
+                                textRecord = Integer.toHexString((int) a);
+                            }
+                        }
+                        else {
+                            textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand().substring(dataItem.getMneumonic().indexOf("\'") + 1, dataItem.getMneumonic().length() - 1), 16));
+                        }
+                    }
+                    else if ("BYTE".equalsIgnoreCase(dataItem.getMneumonic())) {
+                        textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand(), 16));
+                    }
+                    writeToFile(programLine + " " + textRecord, this.listFile);
+                    writeToFile(String.format("T %06d %01d %s", address, (textRecord.length() / 2), textRecord), this.objectFile);
                 }
                 
-                
-            //End loop
             }
 
             //Write last text record
