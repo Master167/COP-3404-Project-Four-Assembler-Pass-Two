@@ -149,34 +149,142 @@ public class SicAssembler {
         return address - initialAddress;
     }// end passOneAssemble()
     
-    private void passTwoAssemble(int programLength, HashTable symbols, OPHashTable opcodes) {
+    private void passTwoAssemble(int programLength, HashTable symbols, OPHashTable opcodes) throws FileNotFoundException {
+        int index;
         int address;
+        int baseAddress;
+        int displacement;
         int textRecordLength;
+        boolean isPC = true;
         String textRecord;
+        String programLine;
+        String temp;
         DataItem dataItem;
         OPCode opcode;
+        File file;
+        Scanner fileScanner;
+        StringTokenizer tokenMaker;
         
-        //Pull first line
-        
-        //Get address
-        
-        //Create Header record
-        
-        //Start loop
-        
-        //  Pull line
-        
-        //  Get OPcode
-        
-        //  Get operand
-        
-        //  Calculate displacement
-        
-        //  Write text record for line
-        
-        //End loop
-        
-        //Write last text record
+        try {
+            file = new File(this.listFile);
+            fileScanner = new Scanner(file);
+            //Pull first line
+            tokenMaker = new StringTokenizer(fileScanner.nextLine());
+            
+            //Get address
+            address = Integer.parseInt(tokenMaker.nextToken().trim());
+            //Create Header record
+            // Check if program has label
+            temp = tokenMaker.nextToken();
+            index = symbols.searchForData(temp);
+            if (index >= 0) {
+                dataItem = symbols.getData(index);
+                textRecord = String.format("H %6s %08d %08d", dataItem.getLabel(), address, programLength);
+            }
+            else {
+                textRecord = String.format("H %6s %08d %08d", "", address, programLength);
+            }
+            writeToFile(textRecord, this.objectFile);
+            //Start loop
+            while ((programLine = fileScanner.nextLine()) != null) {
+                isPC = true;
+                displacement = 0;
+                tokenMaker = new StringTokenizer(programLine);
+                
+                temp = tokenMaker.nextToken();
+                if (temp.charAt(0) == '.' || isNullOrEmpty(temp)) {
+                    continue;
+                }
+                else {
+                    address = Integer.parseInt(temp);
+                }
+                dataItem = buildItem(programLine, opcodes);
+                //  Get OPcode
+                index = opcodes.searchForData(dataItem.getMneumonic());
+                
+                if (index >= 0) {
+                    opcode = opcodes.getOPCode(index);
+
+                    //  Get operand and Calculate displacement
+                    index = symbols.searchForData(dataItem.getOperand());
+                    if (index >= 0) {
+                        displacement = symbols.getData(index).getAddress() - (address + dataItem.getCommandLength());
+                        // Check for PC relative
+                        if (displacement < -2048 || displacement > 2047) {
+                            // outside pc range
+                            isPC = false;
+                            throw new Exception("Figure out what to do with base relative addressing");
+                        }
+                    }
+                    else {
+                        // Does the operand have an immediate addressing flag (is it a number?)
+                    }
+
+                    
+                    if (opcode.getFormat() == 2) {
+                        // Register instruction
+                    }
+                    else if (opcode.getFormat() == 3) {
+                        // Standard instruction
+                        if (opcode.getLabel().charAt(0) == '*') {
+                            textRecord = opcode.getOpcode();
+                        }
+                        else if (dataItem.getOperandFlag() == '#') {
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode()) + 1);
+                        }
+                        else if (dataItem.getOperandFlag() == '@') {
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode()) + 2);
+                        }
+                        else {
+                            textRecord = Integer.toHexString(Integer.parseInt(opcode.getOpcode()) + 3);
+                        }
+                        
+                        if (isPC) {
+                            if (isNullOrEmpty(dataItem.getIndexEntry())) {
+                                textRecord += Integer.toHexString(2);
+                            }
+                            else {
+                                textRecord += Integer.toHexString(10);
+                            }
+                        }
+                        else {
+                            if (isNullOrEmpty(dataItem.getIndexEntry())) {
+                                textRecord += Integer.toHexString(4);
+                            }
+                            else {
+                                textRecord += Integer.toHexString(12);
+                            }
+                        }
+                        
+                        temp = Integer.toHexString(displacement);
+                        if (temp.length() < 3) {
+                            while (temp.length() < 3) {
+                                temp = "0" + temp;
+                            }
+                        }
+                        textRecord += temp;
+                    }
+                    else {
+                        //Extended instruction
+                    }
+                    
+                    // WRITE THE RECORD
+                    writeToFile(String.format("T %06d %01d %s", address, (textRecord.length() / 2), textRecord), this.objectFile);
+                }
+                else {
+                    // Do I have an assembler directive?
+                    // Do I have a RESW
+                }
+                
+                
+            //End loop
+            }
+
+            //Write last text record
+        }
+        catch (FileNotFoundException ex) {
+            System.out.println("I don't know man");
+        }
     }
     
     private DataItem buildCommand(String line, OPHashTable opTable) {
@@ -372,7 +480,7 @@ public class SicAssembler {
             error += " No Operand ";
         }
 
-        if (line.length() >= 10) {
+        if (line.length() >= 17) {
             extended = (line.charAt(16) == '+');
         }
         else {
@@ -480,6 +588,7 @@ public class SicAssembler {
     /**
      * Outputs the message to the Output file
      * @param message 
+     * @param filename 
      */
     public void writeToFile(String message, String filename) {
         try (   

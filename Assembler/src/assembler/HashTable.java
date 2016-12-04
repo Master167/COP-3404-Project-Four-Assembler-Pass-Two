@@ -98,6 +98,15 @@ public class HashTable {
         return this.deletedRecord;
     }
     
+    public DataItem getData(int index) {
+        if (index > 0 && index < this.data.length && this.data[index] != null) {
+            return this.data[index];
+        }
+        else {
+            return this.deletedRecord;
+        }
+    }
+    
     public void printTable() {
         ArrayList<DataItem> list = new ArrayList<DataItem>(Arrays.asList(data));
         Iterator iterator = list.iterator();
