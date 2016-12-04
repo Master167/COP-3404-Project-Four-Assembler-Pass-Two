@@ -154,7 +154,7 @@ public class SicAssembler {
     private void passTwoAssemble(int programLength, HashTable symbols, OPHashTable opcodes) throws FileNotFoundException, Exception {
         int index;
         int address;
-        int baseAddress;
+        int baseAddress = -1;
         int displacement;
         boolean isPC = true;
         String textRecord;
@@ -216,7 +216,13 @@ public class SicAssembler {
                         if (displacement < -2048 || displacement > 2047) {
                             // outside pc range
                             isPC = false;
-                            throw new Exception("Figure out what to do with base relative addressing");
+                            if (baseAddress >= 0) {
+                                displacement = baseAddress - (symbols.getData(index).getAddress());
+                            }
+                            else {
+                                writeToFile("---Error: No Base Declared ---", this.listFile);
+                                displacement = 0;
+                            }
                         }
                     }
                     else {
@@ -312,11 +318,13 @@ public class SicAssembler {
                     
                     // WRITE THE RECORD
                     writeToFile(programLine + " " + textRecord, this.listFile);
-                    index = (textRecord.length() / 2);
-                    if (index == 0) {
-                        index = 1;
+                    if (!isNullOrEmpty(textRecord)) {
+                        index = (textRecord.length() / 2);
+                        if (index == 0) {
+                            index = 1;
+                        }
+                        writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
                     }
-                    writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
                 }
                 else {
                     // Do I have an assembler directive?
@@ -357,11 +365,13 @@ public class SicAssembler {
                         textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand(), 16));
                     }
                     writeToFile(programLine + " " + textRecord, this.listFile);
-                    index = (textRecord.length() / 2);
-                    if (index == 0) {
-                        index = 1;
+                    if (!isNullOrEmpty(textRecord)) {
+                        index = (textRecord.length() / 2);
+                        if (index == 0) {
+                            index = 1;
+                        }
+                        writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
                     }
-                    writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
                 }
                 
             }
