@@ -151,12 +151,11 @@ public class SicAssembler {
         return address - initialAddress;
     }// end passOneAssemble()
     
-    private void passTwoAssemble(int programLength, HashTable symbols, OPHashTable opcodes) throws FileNotFoundException {
+    private void passTwoAssemble(int programLength, HashTable symbols, OPHashTable opcodes) throws FileNotFoundException, Exception {
         int index;
         int address;
         int baseAddress;
         int displacement;
-        int textRecordLength;
         boolean isPC = true;
         String textRecord;
         String programLine;
@@ -195,17 +194,14 @@ public class SicAssembler {
                 displacement = 0;
                 textRecord = "";
                 tokenMaker = new StringTokenizer(programLine);
-                
                 temp = tokenMaker.nextToken();
-                if (temp.charAt(0) == '.' || isNullOrEmpty(temp)) {
+                if (temp.charAt(0) == '.') {
                     writeToFile(programLine, this.listFile);
                     continue;
                 }
                 else {
-                    address = Integer.parseInt(temp, 16);
+                    dataItem = buildItem(programLine, opcodes);
                 }
-                dataItem = buildItem(programLine, opcodes);
-                dataItem.setAddress(address);
                 //  Get OPcode
                 index = opcodes.searchForData(dataItem.getMneumonic());
                 
@@ -215,7 +211,7 @@ public class SicAssembler {
                     //  Get operand and Calculate displacement
                     index = symbols.searchForData(dataItem.getOperand());
                     if (index >= 0) {
-                        displacement = symbols.getData(index).getAddress() - (address + dataItem.getCommandLength());
+                        displacement = symbols.getData(index).getAddress() - (dataItem.getAddress() + dataItem.getCommandLength());
                         // Check for PC relative
                         if (displacement < -2048 || displacement > 2047) {
                             // outside pc range
@@ -316,7 +312,11 @@ public class SicAssembler {
                     
                     // WRITE THE RECORD
                     writeToFile(programLine + " " + textRecord, this.listFile);
-                    writeToFile(String.format("T %06d %01d %s", address, (textRecord.length() / 2), textRecord), this.objectFile);
+                    index = (textRecord.length() / 2);
+                    if (index == 0) {
+                        index = 1;
+                    }
+                    writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
                 }
                 else {
                     // Do I have an assembler directive?
@@ -343,14 +343,25 @@ public class SicAssembler {
                             }
                         }
                         else {
-                            textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand().substring(dataItem.getMneumonic().indexOf("\'") + 1, dataItem.getMneumonic().length() - 1), 16));
+                            index = dataItem.getOperand().indexOf("\'");
+                            if (index >= 0) {
+                                temp = dataItem.getOperand().substring(index, dataItem.getOperand().length() - 1);
+                                textRecord = Integer.toHexString(Integer.parseInt(temp, 16));
+                            }
+                            else {
+                                textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand(), 16));
+                            }
                         }
                     }
                     else if ("BYTE".equalsIgnoreCase(dataItem.getMneumonic())) {
                         textRecord = Integer.toHexString(Integer.parseInt(dataItem.getOperand(), 16));
                     }
                     writeToFile(programLine + " " + textRecord, this.listFile);
-                    writeToFile(String.format("T %06d %01d %s", address, (textRecord.length() / 2), textRecord), this.objectFile);
+                    index = (textRecord.length() / 2);
+                    if (index == 0) {
+                        index = 1;
+                    }
+                    writeToFile(String.format("T %06d %01d %s", dataItem.getAddress(), index, textRecord), this.objectFile);
                 }
                 
             }
@@ -502,15 +513,23 @@ public class SicAssembler {
         int address = 0;
         char operandFlag;
         boolean extended;
+        boolean addressFound = false;
         DataItem item;
         OPCode opc;
         StringTokenizer tokenMaker = new StringTokenizer(line);
         
         while (tokenMaker.hasMoreTokens()) {
+            
             temp = tokenMaker.nextToken();
-            index = line.indexOf(temp);
+            if (addressFound) {
+                index = line.indexOf(temp, 7);
+            }
+            else {
+                index = line.indexOf(temp);
+            }
             if (index >= 0 && index < 7) {
                 address = Integer.parseInt(temp, 16);
+                addressFound = true;
             }
             else if (index >= 7 && index < 14) {
                 label = temp;
